@@ -77,6 +77,33 @@ triage_agent = Agent(
 # Runner to execute agent runs on demand
 runner = Runner()
 
+def determine_agent_from_content(user_text: str, response_text: str) -> str:
+    """
+    Fallback method to determine which agent should have responded based on content analysis.
+    """
+    user_lower = user_text.lower()
+    response_lower = response_text.lower()
+
+    # Check for haiku patterns (University Poet)
+    lines = response_text.strip().split('\n')
+    if len(lines) == 3 or 'haiku' in user_lower or 'poem' in user_lower:
+        # Check if it looks like a haiku structure
+        if len(lines) >= 3:
+            return "University Poet"
+
+    # Check for course-related keywords (Course Advisor)
+    course_keywords = ['course', 'class', 'major', 'degree', 'study', 'academic', 'curriculum', 'credit']
+    if any(keyword in user_lower for keyword in course_keywords):
+        return "Course Advisor"
+
+    # Check for schedule-related keywords (Scheduling Assistant)
+    schedule_keywords = ['schedule', 'time', 'exam', 'calendar', 'date', 'when', 'semester', 'deadline']
+    if any(keyword in user_lower for keyword in schedule_keywords):
+        return "Scheduling Assistant"
+
+    # Default to Triage Agent
+    return "Triage Agent"
+
 async def run_triage_and_handle(session_messages: List[Dict[str, Any]], user_text: str) -> Dict[str, Any]:
     """
     Run triage agent with session context; execute handoffs / tools as requested and return final response.
@@ -98,15 +125,63 @@ async def run_triage_and_handle(session_messages: List[Dict[str, Any]], user_tex
         # Run triage agent with conversation history
         result = await runner.run(triage_agent, input_messages)
 
+        # Debug: Print the result structure to understand what we're getting
+        print(f"DEBUG - Result type: {type(result)}")
+        print(f"DEBUG - Result attributes: {dir(result)}")
+        if hasattr(result, '__dict__'):
+            print(f"DEBUG - Result dict: {result.__dict__}")
+
         # Extract the final output
         final_output = result.final_output if hasattr(result, 'final_output') else str(result)
 
-        # For now, return a simple response - handoffs would be handled automatically by the SDK
+        # Determine which agent actually provided the response
+        responding_agent_name = "Triage Agent"  # Default
+
+        # Check various possible attributes for agent information
+        if hasattr(result, 'messages') and result.messages:
+            print(f"DEBUG - Messages found: {len(result.messages)}")
+            # Look through the messages to find the last agent that spoke
+            for i, message in enumerate(result.messages):
+                print(f"DEBUG - Message {i}: {type(message)}, attributes: {dir(message)}")
+                if hasattr(message, 'sender') and message.sender:
+                    print(f"DEBUG - Message {i} sender: {message.sender}")
+                    if message.sender != 'user':
+                        responding_agent_name = message.sender
+
+        # Check if result has agent info
+        if hasattr(result, 'agent') and result.agent:
+            print(f"DEBUG - Agent found: {result.agent}")
+            if hasattr(result.agent, 'name'):
+                responding_agent_name = result.agent.name
+                print(f"DEBUG - Agent name: {responding_agent_name}")
+
+        # Check for active_agent or current_agent
+        if hasattr(result, 'active_agent'):
+            print(f"DEBUG - Active agent: {result.active_agent}")
+            if hasattr(result.active_agent, 'name'):
+                responding_agent_name = result.active_agent.name
+
+        # Extract tool calls if any
+        tool_calls = []
+        if hasattr(result, 'tool_calls') and result.tool_calls:
+            tool_calls = result.tool_calls
+        elif hasattr(result, 'messages'):
+            for message in result.messages:
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    tool_calls.extend(message.tool_calls)
+
+        # Fallback: Try to determine agent based on content and user query
+        if responding_agent_name == "Triage Agent":
+            responding_agent_name = determine_agent_from_content(user_text, final_output)
+
+        print(f"DEBUG - Final responding agent: {responding_agent_name}")
+        print(f"DEBUG - Final output: {final_output}")
+
         return {
-            "agent": "Triage Agent",
+            "agent": responding_agent_name,
             "text": final_output,
-            "tool_calls": [],
-            "events": []
+            "tool_calls": tool_calls,
+            "events": getattr(result, 'events', [])
         }
 
     except Exception as e:

@@ -101,11 +101,58 @@
   font-weight: 600;
   margin-bottom: 4px;
   color: #666;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .message.user .message-sender {
   text-align: right;
   color: #667eea;
+  justify-content: flex-end;
+}
+
+/* Agent-specific styling */
+.message-sender::before {
+  content: "🤖";
+  font-size: 0.9rem;
+}
+
+.message.user .message-sender::before {
+  content: "👤";
+}
+
+/* Specific agent icons and colors */
+.message-sender[data-agent="Course Advisor"]::before {
+  content: "📚";
+}
+
+.message-sender[data-agent="Course Advisor"] {
+  color: #28a745;
+}
+
+.message-sender[data-agent="University Poet"]::before {
+  content: "🎭";
+}
+
+.message-sender[data-agent="University Poet"] {
+  color: #6f42c1;
+}
+
+.message-sender[data-agent="Scheduling Assistant"]::before {
+  content: "📅";
+}
+
+.message-sender[data-agent="Scheduling Assistant"] {
+  color: #fd7e14;
+}
+
+.message-sender[data-agent="Triage Agent"]::before {
+  content: "🎯";
+}
+
+.message-sender[data-agent="Triage Agent"] {
+  color: #17a2b8;
 }
 
 .message-text {

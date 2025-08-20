@@ -131,7 +131,7 @@ function App() {
           
           {messages.map((message, idx) => (
             <div key={idx} className={`message ${message.sender === 'You' ? 'user' : 'agent'}`}>
-              <div className="message-sender">{message.sender}</div>
+              <div className="message-sender" data-agent={message.sender}>{message.sender}</div>
               <div className="message-text">{message.text}</div>
             </div>
           ))}
