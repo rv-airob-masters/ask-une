@@ -1,0 +1,5 @@
+Django>=4.2
+djangorestframework
+python-dotenv
+openai>=1.0.0
+openai-agents==0.1.0  

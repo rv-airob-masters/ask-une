@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>University Support Assistant</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: scroll; }
+    .agent { font-weight: bold; margin-top: 10px; }
+    .user { color: blue; }
+  </style>
+</head>
+<body>
+  <h1>University Support Assistant</h1>
+  <div id="chat"></div>
+  <input type="text" id="userInput" placeholder="Type your question..." size="60" />
+  <button onclick="sendMessage()">Send</button>
+  <button onclick="clearChat()">Clear Chat</button>
+
+  <script>
+    let sessionId = null;
+
+    async function sendMessage() {
+      const input = document.getElementById("userInput");
+      const text = input.value.trim();
+      if (!text) return;
+
+      appendMessage("You", text, "user");
+      input.value = "";
+
+      const response = await fetch("/chat/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text, session_id: sessionId })
+      });
+
+      const data = await response.json();
+      sessionId = data.session_id; // Save session
+      appendMessage(data.agent, data.text, "agent");
+    }
+
+    function appendMessage(sender, text, cls) {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.className = cls;
+      div.innerHTML = `<span class="agent">${sender}:</span> ${text}`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function clearChat() {
+      document.getElementById("chat").innerHTML = "";
+      sessionId = null;
+    }
+  </script>
+</body>
+</html>
