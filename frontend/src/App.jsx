@@ -101,6 +101,18 @@ function App() {
     }
   };
 
+  const formatMessage = (text) => {
+    if (!text) return text;
+
+    // Convert **bold** to <strong>
+    let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Convert *italic* to <em>
+    formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    return formatted;
+  };
+
   return (
     <div className="app">
       <div className="chat-container">
@@ -132,7 +144,10 @@ function App() {
           {messages.map((message, idx) => (
             <div key={idx} className={`message ${message.sender === 'You' ? 'user' : 'agent'}`}>
               <div className="message-sender" data-agent={message.sender}>{message.sender}</div>
-              <div className="message-text">{message.text}</div>
+              <div
+                className="message-text"
+                dangerouslySetInnerHTML={{ __html: formatMessage(message.text) }}
+              />
             </div>
           ))}
           

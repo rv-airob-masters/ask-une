@@ -77,12 +77,67 @@ triage_agent = Agent(
 # Runner to execute agent runs on demand
 runner = Runner()
 
-def determine_agent_from_content(user_text: str, response_text: str) -> str:
+def format_agent_response(text: str) -> str:
     """
-    Fallback method to determine which agent should have responded based on content analysis.
+    Format agent responses for better readability.
+    """
+    if not isinstance(text, str):
+        return str(text)
+
+    # Add proper line breaks after numbered lists
+    import re
+
+    # Add line breaks before numbered items (1., 2., etc.)
+    text = re.sub(r'(\d+\.\s\*\*)', r'\n\n\1', text)
+
+    # Add line breaks after sentences that end with periods followed by numbers
+    text = re.sub(r'(\.\s)(\d+\.\s)', r'\1\n\n\2', text)
+
+    # Add line breaks before "Would you like" or similar closing questions
+    text = re.sub(r'(\.\s)(Would you like|Do you need|Is there anything)', r'\1\n\n\2', text)
+
+    # Clean up multiple consecutive newlines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    # Remove leading/trailing whitespace
+    text = text.strip()
+
+    return text
+
+def determine_agent_from_content(user_text: str, response_text: str, session_messages: List[Dict[str, Any]] = None) -> str:
+    """
+    Fallback method to determine which agent should have responded based on content analysis and conversation context.
     """
     user_lower = user_text.lower()
     response_lower = response_text.lower()
+
+    # First, check conversation context - if the last agent response was from a specialist,
+    # and this seems like a follow-up, continue with the same agent
+    if session_messages:
+        # Look for the most recent non-user message to see which agent was active
+        last_agent = None
+        for msg in reversed(session_messages):
+            if msg.get('sender') not in ['user', 'You', 'tool']:
+                last_agent = msg.get('sender')
+                break
+
+        # If we have a recent specialist agent and this looks like a follow-up question
+        if last_agent and last_agent != "Triage Agent":
+            follow_up_indicators = [
+                'tell me more', 'more details', 'what about', 'can you explain',
+                'prerequisites', 'requirements', 'how about', 'what are the',
+                'more information', 'details about', 'expand on', 'elaborate'
+            ]
+
+            # Check if this is a follow-up question
+            if any(indicator in user_lower for indicator in follow_up_indicators):
+                print(f"DEBUG - Detected follow-up question, continuing with: {last_agent}")
+                return last_agent
+
+            # Also check if the question is short and contextual (likely a follow-up)
+            if len(user_text.split()) <= 8 and any(word in user_lower for word in ['it', 'that', 'this', 'them', 'those']):
+                print(f"DEBUG - Detected contextual follow-up, continuing with: {last_agent}")
+                return last_agent
 
     # Check for haiku patterns (University Poet)
     lines = response_text.strip().split('\n')
@@ -92,13 +147,23 @@ def determine_agent_from_content(user_text: str, response_text: str) -> str:
             return "University Poet"
 
     # Check for course-related keywords (Course Advisor)
-    course_keywords = ['course', 'class', 'major', 'degree', 'study', 'academic', 'curriculum', 'credit']
+    course_keywords = ['course', 'class', 'major', 'degree', 'study', 'academic', 'curriculum', 'credit', 'cs320', 'stat210']
     if any(keyword in user_lower for keyword in course_keywords):
         return "Course Advisor"
 
     # Check for schedule-related keywords (Scheduling Assistant)
     schedule_keywords = ['schedule', 'time', 'exam', 'calendar', 'date', 'when', 'semester', 'deadline']
     if any(keyword in user_lower for keyword in schedule_keywords):
+        return "Scheduling Assistant"
+
+    # Check response content for agent-specific patterns
+    if 'cs320' in response_lower or 'stat210' in response_lower or 'course' in response_lower:
+        return "Course Advisor"
+
+    if any(word in response_lower for word in ['haiku', 'syllables', 'poem']):
+        return "University Poet"
+
+    if any(word in response_lower for word in ['schedule', 'exam', 'calendar', 'semester']):
         return "Scheduling Assistant"
 
     # Default to Triage Agent
@@ -131,8 +196,43 @@ async def run_triage_and_handle(session_messages: List[Dict[str, Any]], user_tex
         if hasattr(result, '__dict__'):
             print(f"DEBUG - Result dict: {result.__dict__}")
 
+        # Debug the raw final_output before processing
+        raw_output = result.final_output if hasattr(result, 'final_output') else str(result)
+        print(f"DEBUG - Raw final_output type: {type(raw_output)}")
+        print(f"DEBUG - Raw final_output repr: {repr(raw_output)}")
+        print(f"DEBUG - Raw final_output: {raw_output}")
+
         # Extract the final output
         final_output = result.final_output if hasattr(result, 'final_output') else str(result)
+
+        # Clean up the output if it's a JSON string or has escape characters
+        if isinstance(final_output, str):
+            # Remove extra quotes and unescape newlines
+            if final_output.startswith('"') and final_output.endswith('"'):
+                final_output = final_output[1:-1]  # Remove surrounding quotes
+
+            # Unescape common escape sequences
+            final_output = final_output.replace('\\n', '\n')
+            final_output = final_output.replace('\\"', '"')
+            final_output = final_output.replace('\\\\', '\\')
+            final_output = final_output.replace('\\t', '\t')
+
+            # Try to parse as JSON if it looks like a JSON string
+            if final_output.startswith('{') and final_output.endswith('}'):
+                try:
+                    import json
+                    parsed = json.loads(final_output)
+                    if isinstance(parsed, dict) and 'content' in parsed:
+                        final_output = parsed['content']
+                    elif isinstance(parsed, dict) and 'text' in parsed:
+                        final_output = parsed['text']
+                except json.JSONDecodeError:
+                    pass  # Keep original if JSON parsing fails
+
+            # Additional formatting improvements
+            final_output = format_agent_response(final_output)
+
+        print(f"DEBUG - Cleaned final_output: {repr(final_output)}")
 
         # Determine which agent actually provided the response
         responding_agent_name = "Triage Agent"  # Default
@@ -172,7 +272,7 @@ async def run_triage_and_handle(session_messages: List[Dict[str, Any]], user_tex
 
         # Fallback: Try to determine agent based on content and user query
         if responding_agent_name == "Triage Agent":
-            responding_agent_name = determine_agent_from_content(user_text, final_output)
+            responding_agent_name = determine_agent_from_content(user_text, final_output, session_messages)
 
         print(f"DEBUG - Final responding agent: {responding_agent_name}")
         print(f"DEBUG - Final output: {final_output}")
