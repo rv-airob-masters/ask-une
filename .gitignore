@@ -41,6 +41,7 @@ staticfiles/
 venv/
 env/
 ENV/
+une/
 env.bak/
 venv.bak/
 .venv/

@@ -55,7 +55,10 @@ scheduling_agent = Agent(
     name="Scheduling Assistant",
     instructions=(
         "You are Scheduling Assistant. Provide class times, exam schedules, and key academic dates in concise, factual sentences. "
-        "Use the 'tool_academic_calendar' to fetch calendar facts if needed."
+        "Use the 'tool_academic_calendar' tool to fetch calendar facts. When users ask about specific courses, "
+        "include the course code in your query to get detailed schedule information. "
+        "For general schedule questions, provide comprehensive semester information. "
+        "Always format dates clearly and mention any important deadlines."
     ),
     tools=[tool_academic_calendar],
     model="gpt-4o-mini",
