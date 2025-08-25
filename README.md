@@ -1,26 +1,27 @@
 # Ask UNE - University Multi-Agent Support System
 
-A sophisticated AI-powered university support system that uses multiple specialized agents to provide intelligent assistance to students. Built with React frontend and Django backend, featuring OpenAI's multi-agent architecture with `gpt-4o-mini` model.
+A sophisticated AI-powered university support system that uses multiple specialized agents to provide intelligent assistance to students. Built with React frontend and Django backend, featuring OpenAI's multi-agent architecture with context-aware routing and `gpt-4o-mini` model.
 
 ## 🎯 Overview
 
-Ask UNE is an intelligent university support chatbot that routes student queries to specialized AI agents with visual distinction and conversation context awareness:
+Ask UNE is an intelligent university support chatbot that uses a **Router Agent** to analyze queries and conversation context, then routes to specialized AI agents with visual distinction and conversation memory:
 
-- **📚 Course Advisor**: Helps with course selection and academic planning
+- **📚 Course Advisor**: Helps with course selection, academic planning, and study recommendations
 - **🎭 University Poet**: Creates haiku about campus life and culture
 - **📅 Scheduling Assistant**: Provides class times, exam schedules, and academic dates
-- **🎯 Triage Agent**: Intelligently routes queries to the appropriate specialist
+- **🎯 Triage Agent**: Handles general conversations and unclear requests
+- **🔀 Router Agent**: Analyzes queries and conversation context to determine optimal routing
 
 ## ✨ Key Features
 
-- **🤖 Multi-Agent Intelligence**: Specialized agents for different types of queries
-- **🎨 Visual Agent Distinction**: Each agent has unique icons and colors
-- **🧠 Context Awareness**: Maintains conversation context for follow-up questions
+- **🤖 Context-Aware Routing**: Router Agent analyzes conversation history to maintain context for follow-up questions
+- **🎨 Visual Agent Distinction**: Each agent has unique icons and colors in the frontend
+- **🧠 Conversation Memory**: Follow-up questions automatically route to the same specialist agent
 - **📝 Rich Text Formatting**: Supports bold text, proper line breaks, and structured responses
 - **💾 Session Management**: Persistent chat sessions with conversation history
-- **🔧 Tool Integration**: Agents can call external functions for data lookup
-- **⚡ Real-time Chat**: Responsive chat interface with loading states
-- **🔄 Extensible Design**: Easy to add new agents and tools
+- **🔧 Tool Integration**: Agents can call external functions for course lookup and calendar data
+- **⚡ Real-time Chat**: Responsive chat interface with loading states and typing indicators
+- **🔄 Extensible Design**: Easy to add new agents with automatic routing integration
 
 ## 🏗️ Architecture
 
@@ -47,10 +48,11 @@ Each agent is visually distinguished with unique icons and colors:
 
 | Agent | Icon | Color | Specialization |
 |-------|------|-------|----------------|
-| Course Advisor | 📚 | Green | Course selection, academic planning, degree requirements |
+| Course Advisor | 📚 | Green | Course selection, academic planning, degree requirements, study recommendations |
 | University Poet | 🎭 | Purple | Haiku and poetry about campus life and culture |
 | Scheduling Assistant | 📅 | Orange | Class schedules, exam dates, academic calendar |
-| Triage Agent | 🎯 | Teal | Query routing and general assistance |
+| Triage Agent | 🎯 | Teal | General conversations and unclear requests |
+| Router Agent | 🔀 | - | Internal routing logic (not visible to users) |
 | You (User) | 👤 | Blue | User messages |
 
 ## 🚀 Quick Start
@@ -60,6 +62,7 @@ Each agent is visually distinguished with unique icons and colors:
 - Python 3.8+
 - Node.js 16+
 - OpenAI API key with access to `gpt-4o-mini` model
+- OpenAI Agents SDK (`pip install openai-agents` or similar)
 
 ### Backend Setup
 
@@ -124,7 +127,7 @@ Each agent is visually distinguished with unique icons and colors:
 ### ⚠️ **Important Notes**
 
 - **Model Configuration**: All agents use `gpt-4o-mini` for cost-effective and fast responses
-- **Agent Detection**: System automatically detects which agent should respond based on query content and conversation context
+- **AI-Powered Routing**: Router Agent analyzes queries to determine the best specialist, then directly executes the appropriate agent
 - **Context Awareness**: Follow-up questions maintain conversation context with the same specialist agent
 - **Rich Formatting**: Responses support **bold text**, proper line breaks, and structured formatting
 - **CORS**: Backend is configured to allow all hosts for development
@@ -147,14 +150,54 @@ DEBUG=True
 
 All agents are configured to use the `gpt-4o-mini` model for optimal performance and cost-effectiveness:
 
-- **Course Advisor**: `gpt-4o-mini` with course lookup tools
-- **University Poet**: `gpt-4o-mini` optimized for creative haiku generation
-- **Scheduling Assistant**: `gpt-4o-mini` with academic calendar tools
-- **Triage Agent**: `gpt-4o-mini` for intelligent query routing
+- **Router Agent**: `gpt-4o-mini` for analyzing queries and conversation context to determine routing
+- **Course Advisor**: `gpt-4o-mini` with course lookup tools for academic planning
+- **University Poet**: `gpt-4o-mini` optimized for creative haiku generation about campus life
+- **Scheduling Assistant**: `gpt-4o-mini` with academic calendar tools for dates and schedules
+- **Triage Agent**: `gpt-4o-mini` for handling general conversations and unclear requests
+
+## 🧠 How the Router Agent System Works
+
+The system uses a sophisticated two-step process for intelligent query routing:
+
+### Step 1: Context-Aware Analysis
+The **Router Agent** analyzes both the current query and conversation history:
+- **Conversation Context**: Previous agent responses are formatted as `[Agent Name]: response text`
+- **Follow-up Detection**: Identifies contextual indicators like "what about", "tell me more", pronouns
+- **Domain Analysis**: Recognizes course-related, poetry, scheduling, or general queries
+
+### Step 2: Direct Agent Execution
+Once routing is determined, the system directly executes the appropriate specialist agent:
+- **Clean History**: Selected agent receives conversation history without agent name prefixes
+- **Natural Responses**: Agents respond naturally without `[Agent Name]:` prefixes
+- **Correct Attribution**: Frontend displays the actual responding agent with proper icons/colors
+
+### Example Flow
+```
+User: "What courses should I take for data science?"
+→ Router Agent analyzes: course-related query
+→ Router Agent decides: "Course Advisor"
+→ System executes: Course Advisor with clean conversation history
+→ Course Advisor responds: course recommendations
+→ Frontend displays: 📚 Course Advisor
+
+User: "What about electives?" (follow-up)
+→ Router Agent sees: [Course Advisor]: previous course discussion
+→ Router Agent decides: "Course Advisor" (context-aware follow-up)
+→ System executes: Course Advisor
+→ Course Advisor responds: elective recommendations
+→ Frontend displays: 📚 Course Advisor
+```
+
+### Context-Aware Features
+- **Follow-up Questions**: Automatically route to the same specialist agent
+- **Topic Changes**: Override context when user explicitly changes topics
+- **Conversation Memory**: Maintain context across multiple exchanges
+- **Fallback Safety**: Keyword-based routing if Router Agent fails
 
 ### Adding New Agents
 
-The system uses direct agent routing rather than SDK handoffs. To add a new agent:
+The system uses the Router Agent for intelligent routing. To add a new agent:
 
 1. **Create the agent in `agents_integration.py`**:
    ```python
@@ -166,32 +209,38 @@ The system uses direct agent routing rather than SDK handoffs. To add a new agen
    )
    ```
 
-2. **Add routing logic in `determine_target_agent()` function**:
+2. **Update the Router Agent instructions** to include your new agent:
    ```python
-   # Add detection keywords for your new agent
-   new_agent_keywords = ['keyword1', 'keyword2', 'specific_phrase']
-   if any(keyword in user_lower for keyword in new_agent_keywords):
-       print(f"DEBUG - New agent query detected, routing to: New Agent")
-       return "New Agent"
+   # In the router_agent instructions, add your agent to the routing rules:
+   "- ANY question about [your domain] → New Agent\n"
+
+   # Add to the critical instruction list:
+   "New Agent\n"
+
+   # Add routing examples:
+   "User: 'Example query for new agent' → New Agent\n"
    ```
 
-3. **Add agent selection in `run_triage_and_handle()` function**:
+3. **Add agent to the mapping in `run_triage_and_handle()` function**:
    ```python
-   # Get the appropriate agent
-   if target_agent_name == "Course Advisor":
-       target_agent = course_advisor_agent
-   elif target_agent_name == "University Poet":
-       target_agent = university_poet_agent
-   elif target_agent_name == "Scheduling Assistant":
-       target_agent = scheduling_agent
-   elif target_agent_name == "New Agent":  # Add this
-       target_agent = new_agent
-   else:
-       target_agent = triage_agent
-       target_agent_name = "Triage Agent"
+   # Update the agent_mapping dictionary
+   agent_mapping = {
+       "Course Advisor": course_advisor_agent,
+       "University Poet": university_poet_agent,
+       "Scheduling Assistant": scheduling_agent,
+       "Triage Agent": triage_agent,
+       "New Agent": new_agent  # Add this line
+   }
    ```
 
-4. **Update frontend agent list in `App.jsx`** (optional for visual indicators):
+4. **Update the parsing logic** (if needed):
+   ```python
+   # Add to the fallback content analysis in run_triage_and_handle()
+   elif any(word in routing_decision.lower() for word in ['new', 'agent', 'keywords']):
+       routing_decision = "New Agent"
+   ```
+
+5. **Update frontend agent list in `App.jsx`** (optional for visual indicators):
    ```javascript
    const agents = [
      // ... existing agents
@@ -237,37 +286,46 @@ Base URL: `http://localhost:8000/api/`
 
 ### Key Components
 
-- **Session Management**: UUID-based sessions with message history
-- **Agent Routing**: Intelligent triage system for query classification with context awareness
-- **Visual Distinction**: Each agent has unique icons and colors for easy identification
-- **Context Preservation**: Follow-up questions maintain conversation context
+- **Router Agent System**: Two-step process with context-aware routing and direct agent execution
+- **Context-Aware Routing**: Analyzes conversation history to maintain context for follow-up questions
+- **Session Management**: UUID-based sessions with persistent message history
+- **Visual Agent Distinction**: Each agent has unique icons and colors for easy identification
+- **Conversation Memory**: Follow-up questions automatically route to the same specialist agent
+- **Clean Response Format**: Agent responses without name prefixes for natural conversation flow
 - **Rich Text Formatting**: Support for bold text, line breaks, and structured responses
-- **Tool Calling**: Function tools for data lookup and external integrations
-- **Error Handling**: Comprehensive error handling and logging
-- **Debug Logging**: Detailed logging for troubleshooting agent behavior
+- **Tool Integration**: Function tools for course lookup, calendar data, and external integrations
+- **Fallback Safety**: Keyword-based routing if Router Agent fails
+- **Debug Logging**: Comprehensive logging for troubleshooting routing decisions and agent behavior
 
 ## 🧪 Testing
 
 ### Example Conversation Flows
 
-#### Course Advisor Flow:
-1. **Initial Query**: "What courses should I take for data science?"
+#### Context-Aware Course Discussion:
+1. **Initial Query**: "What courses should I take next semester if I'm interested in data science?"
+   - *Router Agent*: Analyzes query → Routes to Course Advisor
+   - *Response from*: 📚 **Course Advisor** (course recommendations)
+2. **Follow-up**: "What about electives?"
+   - *Router Agent*: Sees `[Course Advisor]: previous response` → Routes to Course Advisor
+   - *Response from*: 📚 **Course Advisor** (elective recommendations)
+3. **Follow-up**: "Tell me more about those prerequisites"
+   - *Router Agent*: Context-aware follow-up → Routes to Course Advisor
+   - *Response from*: 📚 **Course Advisor** (prerequisite details)
+
+#### Topic Change Example:
+1. **Course Query**: "What courses should I take for computer science?"
    - *Response from*: 📚 **Course Advisor**
-2. **Follow-up**: "Tell me more about CS320"
-   - *Response from*: 📚 **Course Advisor** (maintains context)
-3. **Follow-up**: "What are the prerequisites for that course?"
-   - *Response from*: 📚 **Course Advisor** (continues context)
+2. **Topic Change**: "Write me a poem about the university cafeteria"
+   - *Router Agent*: Explicit poetry request overrides context → Routes to University Poet
+   - *Response from*: 🎭 **University Poet** (haiku about cafeteria)
+3. **Poetry Follow-up**: "Write another one about the library"
+   - *Router Agent*: Poetry context + follow-up → Routes to University Poet
+   - *Response from*: 🎭 **University Poet** (haiku about library)
 
-#### University Poet Flow:
-1. **Poetry Request**: "Write me a haiku about the library"
-   - *Response from*: 🎭 **University Poet**
-2. **Follow-up**: "Write another one about studying"
-   - *Response from*: 🎭 **University Poet** (maintains context)
-
-#### Scheduling Assistant Flow:
-1. **Schedule Query**: "When do final exams start?"
+#### Scheduling Flow:
+1. **Schedule Query**: "When do final exams start this semester?"
    - *Response from*: 📅 **Scheduling Assistant**
-2. **Follow-up**: "What about midterm dates?"
+2. **Follow-up**: "What about registration deadlines?"
    - *Response from*: 📅 **Scheduling Assistant** (maintains context)
 
 ### Quick Test Queries
@@ -275,7 +333,8 @@ Base URL: `http://localhost:8000/api/`
 - **Course Advisor**: "What courses should I take for computer science?"
 - **University Poet**: "Write me a haiku about campus life"
 - **Scheduling Assistant**: "When is the semester deadline?"
-- **Context Test**: Ask a follow-up question after any specialist response
+- **Context Test**: Ask "What about electives?" after any course discussion
+- **Topic Change Test**: Switch from courses to poetry to test context override
 
 ## 📦 Dependencies
 
@@ -294,7 +353,15 @@ Base URL: `http://localhost:8000/api/`
 
 ## 🔧 Recent Improvements
 
-### Agent Detection & Context Awareness
+### Router Agent System (Latest)
+- **Context-Aware Routing**: Router Agent analyzes conversation history to maintain context for follow-up questions
+- **Two-Step Process**: Router Agent determines routing, then system directly executes the appropriate specialist
+- **Clean Response Format**: Eliminated agent name prefixes from responses for natural conversation flow
+- **Improved Agent Attribution**: Frontend correctly displays which specialist agent responded
+- **Enhanced Course Detection**: Explicit routing rules ensure course questions go to Course Advisor
+- **Fallback Safety**: Robust parsing with keyword-based fallback if Router Agent fails
+
+### Previous Improvements
 - **Smart Agent Attribution**: System correctly identifies which specialist agent provided each response
 - **Conversation Context**: Follow-up questions maintain context with the same agent
 - **Fallback Logic**: Content-based agent detection when SDK handoffs aren't detected
@@ -307,34 +374,67 @@ Base URL: `http://localhost:8000/api/`
 - **Improved Readability**: Better spacing and formatting for structured responses
 
 ### Technical Improvements
+- **Router Agent Architecture**: Two-step routing process with context analysis and direct execution
+- **Enhanced Parsing Logic**: Robust handling of Router Agent responses with fallback content analysis
 - **Model Optimization**: All agents use `gpt-4o-mini` for cost-effective performance
-- **Response Parsing**: Enhanced text cleaning and formatting
-- **Error Handling**: Improved error handling and fallback responses
-- **Frontend Enhancements**: Markdown support and better message rendering
+- **Response Cleaning**: Separate conversation histories for routing vs. execution to eliminate prefixes
+- **Error Handling**: Comprehensive error handling with keyword-based routing fallback
+- **Frontend Enhancements**: Correct agent attribution and visual distinction
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **"Only Triage Agent showing"**
-   - Check that OpenAI API key is set correctly
-   - Verify debug logs in Django terminal
-   - Ensure follow-up questions use contextual language
+1. **"Wrong agent selected" or "Only Triage Agent showing"**
+   - Check Router Agent debug logs: `DEBUG - Router Agent decision`
+   - Verify OpenAI API key is set correctly
+   - Look for parsing issues in `DEBUG - Router Agent cleaned decision`
+   - Ensure Router Agent instructions are not being overridden
 
-2. **"Formatting issues in responses"**
-   - Check that `white-space: pre-wrap` is applied in CSS
-   - Verify markdown formatting is working in frontend
-   - Look for escaped characters in debug logs
+2. **"Agent responses have [Agent Name]: prefix"**
+   - This indicates the clean conversation history isn't being used
+   - Check that `agent_input_messages` (not `router_input_messages`) is used for agent execution
+   - Verify the conversation history separation logic
 
-3. **"Backend connection errors"**
+3. **"Follow-up questions not maintaining context"**
+   - Check that conversation history includes previous agent responses
+   - Verify Router Agent sees `[Agent Name]: previous response` format in debug logs
+   - Ensure follow-up indicators are being detected
+
+4. **"Router Agent giving advice instead of agent names"**
+   - Check Router Agent instructions emphasize "ONLY the agent name"
+   - Verify parsing logic handles long responses and extracts agent names
+   - Look for content analysis fallback in debug logs
+
+5. **"Backend connection errors"**
    - Ensure Django server is running on port 8000
    - Check that virtual environment is activated
-   - Verify all dependencies are installed
+   - Verify all dependencies including OpenAI Agents SDK are installed
 
-4. **"Frontend not updating"**
+6. **"Frontend not updating"**
    - Check that Vite dev server is running
    - Verify hot module replacement is working
    - Clear browser cache if needed
+
+### Debug Output Examples
+
+**Successful Routing:**
+```
+DEBUG - Router Agent decision: 'Course Advisor'
+DEBUG - Selected agent: Course Advisor
+DEBUG - Running Course Advisor with clean conversation history
+DEBUG - Final responding agent: Course Advisor
+```
+
+**Context-Aware Follow-up:**
+```
+DEBUG - Conversation context for Router Agent:
+  1. user: What courses should I take for data science?
+  2. assistant: [Course Advisor]: I recommend CS320 and STAT210...
+  3. user: What about electives?
+DEBUG - Router Agent decision: 'Course Advisor'
+DEBUG - Selected agent: Course Advisor
+```
 
 ## 🤝 Contributing
 

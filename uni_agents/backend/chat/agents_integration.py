@@ -44,8 +44,18 @@ course_advisor_agent = Agent(
 university_poet_agent = Agent(
     name="University Poet",
     instructions=(
-        "You are University Poet. You respond ONLY in haiku (5-7-5 syllables) about campus culture and social life. "
-        "If the user asks for schedules or course advice, politely refuse and suggest the appropriate assistant by name."
+        "You are University Poet. You MUST respond ONLY in traditional haiku format: "
+        "- Exactly 3 lines "
+        "- Line 1: exactly 5 syllables "
+        "- Line 2: exactly 7 syllables "
+        "- Line 3: exactly 5 syllables "
+        "- Topic: campus culture and social life only "
+        "- No additional text, explanations, or commentary "
+        "- If asked about schedules or courses, refuse in haiku format and suggest the appropriate assistant. "
+        "Example format:\n"
+        "Students gather here \n"
+        "Knowledge flows like autumn leaves \n"
+        "Wisdom takes its root "
     ),
     tools=[],
     model="gpt-4o-mini",
@@ -64,16 +74,76 @@ scheduling_agent = Agent(
     model="gpt-4o-mini",
 )
 
-# Triage agent with handoffs to available specialists
+# Router agent - determines which agent should handle the query with conversation context awareness
+router_agent = Agent(
+    name="Router Agent",
+    instructions=(
+        "You are the Router Agent. Your ONLY job is to determine which agent should handle a query. "
+        "You MUST respond with ONLY the exact agent name - nothing else.\n\n"
+
+        "CRITICAL INSTRUCTION: Your response must be EXACTLY one of these four agent names (copy exactly):\n"
+        "Course Advisor\n"
+        "University Poet\n"
+        "Scheduling Assistant\n"
+        "Triage Agent\n\n"
+
+        "DO NOT:\n"
+        "- Provide course recommendations\n"
+        "- Give any advice or information\n"
+        "- Add explanations or additional text\n"
+        "- Use brackets, quotes, or formatting\n"
+        "- Answer the user's question\n\n"
+
+        "ONLY respond with the agent name that should handle the query.\n\n"
+
+        "ROUTING RULES:\n"
+        "- ANY question about courses, classes, academic planning, study, education, majors, degrees, curriculum, credits, prerequisites, electives, subjects, course codes, computer science, data science, AI, machine learning, programming, statistics → Course Advisor\n"
+        "- ANY request for haiku, poetry, verses, creative writing about campus → University Poet\n"
+        "- ANY question about schedules, dates, times, exams, calendar, deadlines, registration → Scheduling Assistant\n"
+        "- General greetings, unclear requests, help requests → Triage Agent\n\n"
+
+        "CONTEXT ANALYSIS: Look at conversation history formatted as '[Agent Name]: response text' to understand what was previously discussed.\n\n"
+
+        "ROUTING PRIORITY:\n"
+        "1. If user asks about courses/education/academic topics → Course Advisor\n"
+        "2. If user asks for poetry/haiku/creative writing → University Poet\n"
+        "3. If user asks about schedules/dates/times → Scheduling Assistant\n"
+        "4. If previous specialist agent responded and current query is a follow-up → same specialist\n"
+        "5. If general greeting or unclear → Triage Agent\n\n"
+
+        "FOLLOW-UP DETECTION:\n"
+        "If you see '[Course Advisor]:' in recent history and user asks 'what about', 'tell me more', 'also', 'and', 'electives', 'prerequisites' → Course Advisor\n"
+        "If you see '[University Poet]:' in recent history and user asks 'write another', 'more poetry', 'another one' → University Poet\n"
+        "If you see '[Scheduling Assistant]:' in recent history and user asks 'when do', 'what about deadlines' → Scheduling Assistant\n\n"
+
+        "EXAMPLES (respond with ONLY the agent name):\n"
+        "User: 'What courses should I take for data science?' → Course Advisor\n"
+        "User: 'undergrad in ML' (after course discussion) → Course Advisor\n"
+        "User: 'What about electives?' (after course discussion) → Course Advisor\n"
+        "User: 'Write me a haiku' → University Poet\n"
+        "User: 'Write another one' (after poetry) → University Poet\n"
+        "User: 'When do exams start?' → Scheduling Assistant\n"
+        "User: 'Hello' → Triage Agent\n\n"
+
+        "REMEMBER: Respond with ONLY the agent name. No explanations, no course advice, no additional text."
+    ),
+    tools=[],
+    model="gpt-4o-mini",
+)
+
+# Triage agent - handles general conversations and unclear requests
 triage_agent = Agent(
     name="Triage Agent",
     instructions=(
-        "You are the Triage Agent. Decide which specialist should handle the user's request: Course Advisor (courses/planning), "
-        "University Poet (poems/haiku about campus/social life), or Scheduling Assistant (dates/schedules). "
-        "If uncertain, ask a one-sentence clarifying question. If you decide a specific specialist should handle the request, use a handoff."
+        "You are the Triage Agent. You handle general greetings, unclear requests, and provide guidance when users need help. "
+        "You are friendly, helpful, and conversational. When users greet you or ask general questions, engage naturally. "
+        "If users ask about specific topics that other agents handle, politely guide them:\n"
+        "- For course questions: 'I can help you find the right courses! What subject or level are you interested in?'\n"
+        "- For schedule questions: 'I can help you with scheduling information! What dates or deadlines do you need to know about?'\n"
+        "- For creative requests: 'I can help with campus poetry! Would you like a haiku about university life?'\n\n"
+        "Keep responses conversational and helpful. Ask follow-up questions to better understand what the user needs."
     ),
-    # register handoff options (agents-as-tools)
-    handoffs=[course_advisor_agent, university_poet_agent, scheduling_agent],
+    tools=[],
     model="gpt-4o-mini",
 )
 
@@ -107,50 +177,26 @@ def format_agent_response(text: str) -> str:
 
     return text
 
+
+
 def determine_target_agent(user_text: str, session_messages: List[Dict[str, Any]] = None) -> str:
     """
     Determine which agent should handle the user's query based on content analysis and conversation context.
-    This is the main routing logic that decides which specialist agent to use.
+    Priority: 1) Strong agent keywords, 2) Follow-up context, 3) Default to Triage
     """
     user_lower = user_text.lower()
-
+    
     print(f"DEBUG - Routing analysis for: '{user_text}'")
-
-    # First, check conversation context for follow-up questions
-    if session_messages:
-        # Look for the most recent non-user message to see which agent was active
-        last_agent = None
-        for msg in reversed(session_messages):
-            if msg.get('sender') not in ['user', 'You', 'tool']:
-                last_agent = msg.get('sender')
-                break
-
-        # If we have a recent specialist agent and this looks like a follow-up question
-        if last_agent and last_agent != "Triage Agent":
-            follow_up_indicators = [
-                'tell me more', 'more details', 'what about', 'can you explain',
-                'prerequisites', 'requirements', 'how about', 'what are the',
-                'more information', 'details about', 'expand on', 'elaborate',
-                'that course', 'those courses', 'about it', 'about that'
-            ]
-
-            # Check if this is a follow-up question
-            if any(indicator in user_lower for indicator in follow_up_indicators):
-                print(f"DEBUG - Follow-up detected, routing to: {last_agent}")
-                return last_agent
-
-            # Also check if the question is short and contextual (likely a follow-up)
-            if len(user_text.split()) <= 8 and any(word in user_lower for word in ['it', 'that', 'this', 'them', 'those']):
-                print(f"DEBUG - Contextual follow-up detected, routing to: {last_agent}")
-                return last_agent
-
-    # Check for poetry/haiku requests (University Poet)
+    
+    # FIRST PRIORITY: Check for strong agent-specific indicators
+    
+    # Poetry requests (University Poet) - highest specificity
     poetry_indicators = ['haiku', 'poem', 'poetry', 'verse', 'write me a', 'compose a']
     if any(indicator in user_lower for indicator in poetry_indicators):
         print(f"DEBUG - Poetry request detected, routing to: University Poet")
         return "University Poet"
-
-    # Check for course-related queries (Course Advisor)
+    
+    # Course-related queries (Course Advisor)
     course_keywords = [
         'course', 'courses', 'class', 'classes', 'major', 'degree', 'study', 'studying',
         'academic', 'curriculum', 'credit', 'credits', 'cs320', 'stat210', 'cs250', 'cs499',
@@ -161,18 +207,47 @@ def determine_target_agent(user_text: str, session_messages: List[Dict[str, Any]
     if any(keyword in user_lower for keyword in course_keywords):
         print(f"DEBUG - Course query detected, routing to: Course Advisor")
         return "Course Advisor"
-
-    # Check for schedule-related queries (Scheduling Assistant)
+    
+    # Schedule-related queries (Scheduling Assistant)
     schedule_keywords = [
-        'schedule', 'time', 'exam', 'exams', 'calendar', 'date', 'dates', 'when',
+        'schedule', 'time', 'exam', 'exams', 'calendar', 'date', 'dates', 'when', 
         'semester', 'deadline', 'deadlines', 'final', 'finals', 'midterm', 'midterms',
         'start', 'end', 'begins', 'registration', 'when do', 'when does', 'when is'
     ]
     if any(keyword in user_lower for keyword in schedule_keywords):
         print(f"DEBUG - Schedule query detected, routing to: Scheduling Assistant")
         return "Scheduling Assistant"
-
-    # Default to Triage Agent for general queries
+    
+    # SECOND PRIORITY: Check conversation context for follow-up questions
+    # (Only if no strong agent-specific keywords were found above)
+    if session_messages:
+        # Look for the most recent non-user message to see which agent was active
+        last_agent = None
+        for msg in reversed(session_messages):
+            if msg.get('sender') not in ['user', 'You', 'tool']:
+                last_agent = msg.get('sender')
+                break
+        
+        # If we have a recent specialist agent and this looks like a follow-up question
+        if last_agent and last_agent != "Triage Agent":
+            follow_up_indicators = [
+                'tell me more', 'more details', 'what about', 'can you explain', 
+                'prerequisites', 'requirements', 'how about', 'what are the',
+                'more information', 'details about', 'expand on', 'elaborate',
+                'that course', 'those courses', 'about it', 'about that'
+            ]
+            
+            # Check if this is a follow-up question
+            if any(indicator in user_lower for indicator in follow_up_indicators):
+                print(f"DEBUG - Follow-up detected, routing to: {last_agent}")
+                return last_agent
+            
+            # Also check if the question is short and contextual (likely a follow-up)
+            if len(user_text.split()) <= 8 and any(word in user_lower for word in ['it', 'that', 'this', 'them', 'those']):
+                print(f"DEBUG - Contextual follow-up detected, routing to: {last_agent}")
+                return last_agent
+    
+    # THIRD PRIORITY: Default to Triage Agent for general queries
     print(f"DEBUG - General query, routing to: Triage Agent")
     return "Triage Agent"
 
@@ -269,40 +344,100 @@ def determine_agent_from_content(user_text: str, response_text: str, session_mes
 
 async def run_triage_and_handle(session_messages: List[Dict[str, Any]], user_text: str) -> Dict[str, Any]:
     """
-    Determine the appropriate agent and run it directly based on query analysis.
+    Use Router Agent to determine routing, then call the appropriate agent directly.
     Returns: { 'agent': agent_name, 'text': ..., 'tool_calls': [...], 'events': [...] }
     """
-    # Convert session messages to the format expected by the SDK
-    conversation_history = []
-    for msg in session_messages[:-1]:  # exclude the current user message
-        if msg['sender'] == 'user':
-            conversation_history.append({"role": "user", "content": msg['text']})
-        elif msg['sender'] not in ['tool']:  # agent messages
-            conversation_history.append({"role": "assistant", "content": msg['text']})
+    # Convert session messages for Router Agent (with agent context for routing decisions)
+    router_conversation_history = []
+    if session_messages:
+        for msg in session_messages[:-1]:  # exclude the current user message
+            if msg['sender'] == 'user':
+                router_conversation_history.append({"role": "user", "content": msg['text']})
+            elif msg['sender'] not in ['tool']:  # agent messages
+                # Include agent name in the content for Router Agent context
+                agent_context = f"[{msg['sender']}]: {msg['text']}"
+                router_conversation_history.append({"role": "assistant", "content": agent_context})
 
-    # Add current user message
-    input_messages = conversation_history + [{"role": "user", "content": user_text}]
+    # Router Agent input with context
+    router_input_messages = router_conversation_history + [{"role": "user", "content": user_text}]
 
-    # Determine which agent should handle this query
-    target_agent_name = determine_target_agent(user_text, session_messages)
-    print(f"DEBUG - Target agent determined: {target_agent_name}")
+    # Convert session messages for actual agent execution (without agent prefixes)
+    agent_conversation_history = []
+    if session_messages:
+        for msg in session_messages[:-1]:  # exclude the current user message
+            if msg['sender'] == 'user':
+                agent_conversation_history.append({"role": "user", "content": msg['text']})
+            elif msg['sender'] not in ['tool']:  # agent messages
+                # No agent prefix for actual agent execution
+                agent_conversation_history.append({"role": "assistant", "content": msg['text']})
 
-    # Get the appropriate agent
-    if target_agent_name == "Course Advisor":
-        target_agent = course_advisor_agent
-    elif target_agent_name == "University Poet":
-        target_agent = university_poet_agent
-    elif target_agent_name == "Scheduling Assistant":
-        target_agent = scheduling_agent
-    else:
-        target_agent = triage_agent
-        target_agent_name = "Triage Agent"
+    # Agent execution input without prefixes
+    agent_input_messages = agent_conversation_history + [{"role": "user", "content": user_text}]
+
+    # Debug: Print conversation context for Router Agent
+    print(f"DEBUG - Conversation context for Router Agent:")
+    for i, msg in enumerate(router_input_messages):
+        content_preview = msg['content'][:100] + "..." if len(msg['content']) > 100 else msg['content']
+        print(f"  {i+1}. {msg['role']}: {content_preview}")
 
     try:
-        # Run the selected agent directly
-        result = await runner.run(target_agent, input_messages)
+        # Step 1: Use Router Agent to determine which agent should handle this
+        print(f"DEBUG - Running Router Agent to determine routing for: '{user_text}'")
+        router_result = await runner.run(router_agent, router_input_messages)
 
-        # Extract and clean the final output
+        # Extract the routing decision
+        routing_decision = router_result.final_output if hasattr(router_result, 'final_output') else str(router_result)
+        if isinstance(routing_decision, str):
+            routing_decision = routing_decision.strip().strip('"\'')
+            # Remove brackets if Router Agent added them
+            routing_decision = routing_decision.strip('[]')
+
+            # If the response is too long, it means Router Agent gave advice instead of just agent name
+            # Extract just the agent name from the beginning
+            if len(routing_decision) > 50:  # Agent names should be short
+                print(f"DEBUG - Router Agent gave long response instead of agent name, extracting...")
+                # Look for agent names at the start of the response
+                for agent_name in ["Course Advisor", "University Poet", "Scheduling Assistant", "Triage Agent"]:
+                    if routing_decision.startswith(agent_name):
+                        routing_decision = agent_name
+                        break
+                else:
+                    # If no agent name found at start, default based on content
+                    if any(word in routing_decision.lower() for word in ['course', 'class', 'study', 'academic', 'machine learning', 'data science']):
+                        routing_decision = "Course Advisor"
+                    elif any(word in routing_decision.lower() for word in ['haiku', 'poem', 'poetry']):
+                        routing_decision = "University Poet"
+                    elif any(word in routing_decision.lower() for word in ['schedule', 'exam', 'calendar']):
+                        routing_decision = "Scheduling Assistant"
+                    else:
+                        routing_decision = "Triage Agent"
+
+        print(f"DEBUG - Router Agent raw decision: '{router_result.final_output if hasattr(router_result, 'final_output') else str(router_result)}'")
+        print(f"DEBUG - Router Agent cleaned decision: '{routing_decision}'")
+
+        # Step 2: Get the appropriate agent based on routing decision
+        agent_mapping = {
+            "Course Advisor": course_advisor_agent,
+            "University Poet": university_poet_agent,
+            "Scheduling Assistant": scheduling_agent,
+            "Triage Agent": triage_agent
+        }
+
+        target_agent = agent_mapping.get(routing_decision, triage_agent)
+        target_agent_name = routing_decision if routing_decision in agent_mapping else "Triage Agent"
+
+        print(f"DEBUG - Selected agent: {target_agent_name}")
+
+        # Step 3: Run the selected agent (using clean conversation history without agent prefixes)
+        print(f"DEBUG - Running {target_agent_name} with clean conversation history")
+        print(f"DEBUG - Clean conversation context for {target_agent_name}:")
+        for i, msg in enumerate(agent_input_messages):
+            content_preview = msg['content'][:100] + "..." if len(msg['content']) > 100 else msg['content']
+            print(f"  {i+1}. {msg['role']}: {content_preview}")
+
+        result = await runner.run(target_agent, agent_input_messages)
+
+        # Extract the final output
         final_output = result.final_output if hasattr(result, 'final_output') else str(result)
 
         # Clean up the output
@@ -340,11 +475,34 @@ async def run_triage_and_handle(session_messages: List[Dict[str, Any]], user_tex
         }
 
     except Exception as e:
-        print(f"DEBUG - Error running agent: {e}")
-        # Fallback response
-        return {
-            "agent": "Triage Agent",
-            "text": f"I'm here to help! How can I assist you with courses, schedules, or campus life?",
-            "tool_calls": [],
-            "events": []
+        print(f"DEBUG - Error in triage and handle: {e}")
+        # Fallback to keyword-based routing
+        target_agent_name = determine_target_agent(user_text, session_messages)
+
+        # Get the appropriate agent
+        agent_mapping = {
+            "Course Advisor": course_advisor_agent,
+            "University Poet": university_poet_agent,
+            "Scheduling Assistant": scheduling_agent,
+            "Triage Agent": triage_agent
         }
+
+        target_agent = agent_mapping.get(target_agent_name, triage_agent)
+
+        try:
+            result = await runner.run(target_agent, agent_input_messages)
+            final_output = result.final_output if hasattr(result, 'final_output') else str(result)
+
+            return {
+                "agent": target_agent_name,
+                "text": final_output,
+                "tool_calls": [],
+                "events": []
+            }
+        except:
+            return {
+                "agent": "Triage Agent",
+                "text": f"I'm here to help! How can I assist you with courses, schedules, or campus life?",
+                "tool_calls": [],
+                "events": []
+            }
